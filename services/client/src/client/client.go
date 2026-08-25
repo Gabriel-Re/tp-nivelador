@@ -19,6 +19,9 @@ type ClientConfig struct {
 	ServerHost string
 	ServerPort string
 	AgencyId   string
+
+	InputFile string
+	OutputFIle string
 }
 
 type Client struct {
@@ -89,4 +92,22 @@ func (client *Client) Run() error {
 	logger.Info(mainAction, logger.Success, "agency-id", client.config.AgencyId)
 
 	return nil
+}
+
+func readFileContent(filePath string) (string, error) {
+
+	//1. Abrir INPUT_FILE
+	fi, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	
+	//2. crear OUTPUT_FILE
+	//3. Mientras haya lineas en INPUT_FILE:
+	//4. leer una linea
+	//5. enviar linea al sv
+	//6. esperar respuesta del sv
+	//7. escribir respuesta en OUTPUT_FILE
+	//8. cerrar INPUT_FILE y OUTPUT_FILE
+
 }
