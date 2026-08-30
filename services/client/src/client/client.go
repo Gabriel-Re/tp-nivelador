@@ -3,6 +3,8 @@ package client
 import (
 	"net"
 	"time"
+	"os"
+	"bufio"
 
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
@@ -11,17 +13,13 @@ import (
 const CONNECTION_ATTEMPTS_MAX = 3
 const CONNECTION_ATTEMPS_DELAY_MS = 200
 
-const ECHO_CLIENT_BUFFER_SIZE = 512
-const ECHO_CLIENT_MESSAGE_AMOUNT = 3
-const ECHO_CLIENT_MESSAGE_DELAY_MS = 1000
-
 type ClientConfig struct {
 	ServerHost string
 	ServerPort string
 	AgencyId   string
 
 	InputFile string
-	OutputFIle string
+	OutputFile string
 }
 
 type Client struct {
@@ -61,53 +59,103 @@ func connectToServer(host, port string) (net.Conn, error) {
 	return conn, err
 }
 
+/*
+ * La funcion se encarga del flujo principal del cliente
+ *
+ * Se encarga de:
+ * 1. Abrir el archivo de input.
+ * 2. Crear el archivo donde se guardan las respuestas.
+ * 3. Delega el procesamiento de las apuestas.
+ * 4. Cierra los archivos y la conexion cuando termina.
+ *
+ */
 func (client *Client) Run() error {
-	const mainAction = "test-echo-server"
-	defer client.conn.Close()
+	//Me aseguro de cerrar la conexion
+    defer client.conn.Close()
 
-	for messageId := range ECHO_CLIENT_MESSAGE_AMOUNT {
-		messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", messageId}
-		logger.Info(mainAction, logger.InProgress, messageArgs...)
+	//Abro el csv input
+    inputFile, err := os.Open(client.config.InputFile)
+    if err != nil {
+        return err
+    }
+	//Me aseguro de cerrar el archivo input
+    defer inputFile.Close()
 
-		clientMessage := client.config.AgencyId
+	//Creo el output
+    outputFile, err := os.Create(client.config.OutputFile)
+    if err != nil {
+        return err
+    }
+	//Me aseguro de cerrar el archivo output
+    defer outputFile.Close()
 
-		if err := safe_socket.SendAll(client.conn, []byte(clientMessage)); err != nil {
-			logger.Error("send-message", logger.Fail, messageArgs...)
-			return err
-		}
-
-		responseBuffer, err := safe_socket.RecvAll(client.conn, ECHO_CLIENT_BUFFER_SIZE)
-		if err != nil {
-			logger.Error("recv-response", logger.Fail, messageArgs...)
-			return err
-		}
-
-		if string(responseBuffer) != clientMessage {
-			logger.Error("check-response", logger.Fail, messageArgs...)
-			return err
-		}
-
-		time.Sleep(ECHO_CLIENT_MESSAGE_DELAY_MS * time.Millisecond)
-	}
-	logger.Info(mainAction, logger.Success, "agency-id", client.config.AgencyId)
-
-	return nil
+    return client.processInputFile(inputFile, outputFile)
 }
 
-func readFileContent(filePath string) (string, error) {
 
-	//1. Abrir INPUT_FILE
-	fi, err := os.Open(filePath)
-	if err != nil {
-		return "", err
-	}
-	
-	//2. crear OUTPUT_FILE
-	//3. Mientras haya lineas en INPUT_FILE:
-	//4. leer una linea
-	//5. enviar linea al sv
-	//6. esperar respuesta del sv
-	//7. escribir respuesta en OUTPUT_FILE
-	//8. cerrar INPUT_FILE y OUTPUT_FILE
+/*
+ * La funcion se encarga de procesar el archivo linea por linea
+ *
+ * Cada linea representa una apuesta, para cada una:
+ * 1. Lee la linea y la envia al servidor.
+ * 2. Recibe la respuesta del servidor.
+ * 3. Escribe esa respuesta en el archivo de salida
+ *
+ */
+func (client *Client) processInputFile(
+    inputFile *os.File,
+    outputFile *os.File,
+) error {
 
+	//Uso scanner para recorrer linea por linea, por defecto usa ScanLines (https://pkg.go.dev/bufio#NewScanner)
+    scanner := bufio.NewScanner(inputFile)
+
+    for scanner.Scan() {
+		//ScanLines no devuelve el fin de linea, entonces lo agrego
+        message := scanner.Text() + "\n"
+
+		//Envio al server y espero respuesta
+        response, err := client.sendMessage(message)
+        if err != nil {
+            return err
+        }
+
+		//Guardo el archivo de salida
+        if _, err := outputFile.Write(response); err != nil {
+            return err
+        }
+    }
+
+	//Si scanner termino por un error se devuelve, caso de que haya leido todo el archivo devuelve nil.
+    return scanner.Err()
+}
+
+
+/*
+ * La funcion se encarga de la comunicación con el servidor.
+ *
+ * Recibe un mensaje, lo envia a traves del socket y esperar
+ * recibir una respuesta del servidor del mismo tamaño. 
+ *
+ */
+func (client *Client) sendMessage(message string) ([]byte, error) {
+
+	// Envía todos los bytes del mensaje al servidor
+    if err := safe_socket.SendAll(
+        client.conn,
+        []byte(message),
+    ); err != nil {
+        return nil, err
+    }
+
+	// Como el servidor hace echo, esperamos recibir la misma cantidad de bytes que enviamos
+    response, err := safe_socket.RecvAll(
+        client.conn,
+        len(message),
+    )
+    if err != nil {
+        return nil, err
+    }
+
+    return response, nil
 }
