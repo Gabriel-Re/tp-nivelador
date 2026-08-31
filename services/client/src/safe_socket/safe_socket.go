@@ -2,29 +2,44 @@ package safe_socket
 
 import "io"
 
+const MAX_NO_PROGRESS_ATTEMPTS = 3
 
 /*
  * Envía todos los bytes recibidos a través del socket.
  * Como socket.Write() puede devolver menos bytes de los solicitados,
  * incluso cuando quedan datos por enviar, para esto realizo escrituras sucesivas
  * hasta completar el buffer.
+ * En caso de que Write() no avance, se realizan un máximo de MAX_NO_PROGRESS_ATTEMPTS intentos antes de retornar error.
  */
 func SendAll(socket io.Writer, bytes []byte) error {
 	totalSent := 0
+	noProgressAttempts := 0
 
 	for totalSent < len(bytes) {
 		// Envio solamente la parte del mensaje que no fue enviada
 		n, err := socket.Write(bytes[totalSent:])
+		
+		// Los bytes hasta n fueron enviados, los acumulo
+		if n > 0 {
+			totalSent += n
+
+			// Reinicio el contador de intentos sin avance
+			noProgressAttempts = 0
+		}
+		
 		if err != nil {
 			return err
 		}
 		
-		// Evito quedar en loop infinito si Write no avanza
+		// Si Write no envió ningun byte, vuelvo a intentar
+		// Limito los intentos para evitar un posible loop infinito
 		if n == 0 {
-			return io.ErrShortWrite
+			noProgressAttempts++
+
+			if noProgressAttempts >= MAX_NO_PROGRESS_ATTEMPTS {
+				return io.ErrNoProgress
+			}
 		}
-		
-		totalSent += n
 	}
 	return nil
 }
