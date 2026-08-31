@@ -49,15 +49,31 @@ func SendAll(socket io.Writer, bytes []byte) error {
  * Como socket.Read() puede devolver menos bytes de los solicitados,
  * incluso cuando quedan datos por recibir, para esto realizo lecturas sucesivas
  * hasta completar el buffer.
+ * En caso de que Read() no avance, se realizan un máximo de MAX_NO_PROGRESS_ATTEMPTS intentos antes de retornar error.
  */
 func RecvAll(socket io.Reader, size int) ([]byte, error) {
 
 	buff := make([]byte, size)
 
 	totalReceived := 0
+	noProgressAttempts := 0
+
 	for totalReceived < size {
 		// Leo solamente sobre la parte del buffer que falta completar.
 		n, err := socket.Read(buff[totalReceived:])
+
+		// Acumulo los bytes recibidos
+		if n > 0 {
+			totalReceived += n
+
+			// Reinicio el contador
+			noProgressAttempts = 0
+		}
+
+		// Si ya recibi todos los bytes, retorno
+		if totalReceived == size {
+			return buff, nil
+		}
 
 		if err != nil {
 			return nil, err
@@ -66,10 +82,12 @@ func RecvAll(socket io.Reader, size int) ([]byte, error) {
 		// Si Read no devuelve bytes ni error, significa que no avanzó.
 		// Corto para evitar loop infinito.
 		if n == 0 {
-			return nil, io.ErrNoProgress
-		}
+			noProgressAttempts++
 
-		totalReceived += n
+			if noProgressAttempts >= MAX_NO_PROGRESS_ATTEMPTS {
+				return nil, io.ErrNoProgress
+			}
+		}
 	}
 	return buff, nil
 }
