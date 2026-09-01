@@ -5,6 +5,7 @@ import (
 	"time"
 	"os"
 	"bufio"
+	"errors"
 
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
@@ -12,6 +13,7 @@ import (
 
 const CONNECTION_ATTEMPTS_MAX = 3
 const CONNECTION_ATTEMPS_DELAY_MS = 200
+const ECHO_MESSAGE_SIZE = 1024
 
 type ClientConfig struct {
 	ServerHost string
@@ -140,22 +142,36 @@ func (client *Client) processInputFile(
  */
 func (client *Client) sendMessage(message string) ([]byte, error) {
 
-	// Envía todos los bytes del mensaje al servidor
+	messageBytes := []byte(message)
+
+	// Verifico que el mensaje entre en el tamaño fijo del echo server (1024 bytes)
+	if len(messageBytes) > ECHO_MESSAGE_SIZE {
+		return nil, errors.New("message exceeds maximum echo message size")
+	}
+
+	// Hago un buffer fijo de 1024 bytes, los bytes sin datos los dejo en 0
+	buffer := make([]byte, ECHO_MESSAGE_SIZE)
+
+	// Copio el mensaje al comienzo del buffer
+	copy(buffer, messageBytes)
+
+	// Envio exactamente 1024 bytes
     if err := safe_socket.SendAll(
         client.conn,
-        []byte(message),
+        buffer,
     ); err != nil {
         return nil, err
     }
 
-	// Como el servidor hace echo, esperamos recibir la misma cantidad de bytes que enviamos
+	// Como el servidor devuelve los 1024 bytes, espero exactamente esa cantidad
     response, err := safe_socket.RecvAll(
         client.conn,
-        len(message),
+        ECHO_MESSAGE_SIZE,
     )
     if err != nil {
         return nil, err
     }
 
-    return response, nil
+	// EL servidor devolvio el pending, asi que retorno solamente los bytes correspondientes al mensaje original
+    return response[:len(messageBytes)], nil
 }

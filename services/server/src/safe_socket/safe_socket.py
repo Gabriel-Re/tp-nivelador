@@ -16,7 +16,13 @@ def recv_all(socket: socket.socket, size):
         
         remaining = size - len(buffer)
 
+        # Recibo los bytes restantes
         chunk = socket.recv(remaining)
+
+        # Si retorna vacio (b") y todavia no se recibio nada,
+        # significa que el cliente cerro normalmente la conexión
+        if chunk == b"" and len(buffer) == 0:
+            return b""
 
         # Si retorna vacio (b") significa que el cliente se desconecto
         if chunk == b"":
