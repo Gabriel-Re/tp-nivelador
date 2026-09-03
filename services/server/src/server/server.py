@@ -49,4 +49,5 @@ class Server:
                     raise e
                 logger.info(action, logger.LogResult.success)
 
-                self._handle_client(client_socket)
+                with client_socket:
+                    self._handle_client(client_socket)
