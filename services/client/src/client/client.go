@@ -6,6 +6,7 @@ import (
 	"os"
 	"bufio"
 	"errors"
+	"io"
 
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
@@ -122,8 +123,8 @@ func (client *Client) processInputFile(
             return err
         }
 
-		//Guardo el archivo de salida
-        if _, err := outputFile.Write(response); err != nil {
+		//Escribo la respuesta en el archivo de salida verificando que hayan llegado todos los bytes
+        if err := writeAllBytes(outputFile, response); err != nil {
             return err
         }
     }
@@ -174,4 +175,41 @@ func (client *Client) sendMessage(message string) ([]byte, error) {
 
 	// EL servidor devolvio el pending, asi que retorno solamente los bytes correspondientes al mensaje original
     return response[:len(messageBytes)], nil
+}
+
+
+/*
+ * Escribe todos los bytes de data usando el writer
+ *
+ * Como Write() puede escribir menos bytes que los solicitados,
+ * se realizan escrituras sucesivas hasta completar todos los datos.
+ *
+ */
+func writeAllBytes(writer io.Writer, data []byte) error {
+	// Cantidad total de bytes escritos
+	totalWritten := 0
+
+	// Mientras queden bytes por escribir, sigo intentando
+	for totalWritten < len(data) {
+		
+		// Escribo la parte que todavia no fue escrita
+		n, err := writer.Write(data[totalWritten:])
+
+		if err != nil {
+			return err
+		}
+
+		// Acumulo los bytes escritos
+		if n > 0 {
+			totalWritten += n
+		}
+
+		// No hubo error pero tampoco se escribieron bytes,
+		// corto para evitar loop
+		if n == 0 {
+			return io.ErrNoProgress
+		}
+	}
+
+	return nil
 }
