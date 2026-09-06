@@ -18,6 +18,7 @@ const (
  * Tamaño del header y del payload de un mensaje.
  */
 const (
+	// Un byte para el tipo de mensaje y 4 bytes para el tamaño del payload.
 	HeaderSize = 5
 	MaxPayloadSize = 1024 //TODO tamaño máximo del payload (a definir) 
 )
@@ -27,7 +28,7 @@ const (
  */
 type Header struct {
 	Type MessageType
-	PayloadSize uint32
+	PayloadLength uint32
 }
 
 /*
