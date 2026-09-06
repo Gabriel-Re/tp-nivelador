@@ -1,0 +1,30 @@
+from dataclasses import dataclass
+from enum import IntEnum
+
+# 1 byte para el tipo de mensaje
+# 4 bytes para el tamaño del payload
+HEADER_SIZE = 5
+
+# TODO: Definir el tamaño máx
+MAX_PAYLOAD_SIZE = 1024 
+
+"""Tipos de mensajes definidos por el protocolo""" # TODO: Definir si va a ser así o si va a ser un enum de strings
+class MessageType(IntEnum):
+    BET = 1
+    END_BETS = 2
+    RESULTS = 3
+    ERROR = 4
+
+
+"""Información necesaria para interpretar el payload de un mensaje"""
+@dataclass
+class Header:
+    message_type: MessageType
+    payload_length: int
+
+
+"""Representa un mensaje del protocolo"""
+@dataclass
+class Message:
+    header: Header
+    payload: bytes
