@@ -65,3 +65,30 @@ func ValidateHeader(header Header) error {
 
 	return nil
 }
+
+/*
+ * Verifica la consistencia entre los headers de los distintos tipos de mensaje y el payload recibido.
+ */
+func ValidateMessage(message Message) error {
+	if err := ValidateHeader(message.Header); err != nil {
+		return err
+	}
+
+	if uint32(len(message.Payload)) != message.Header.PayloadLength {
+		return fmt.Errorf("payload length mismatch: header=%d actual=%d", message.Header.PayloadLength, len(message.Payload))
+	}
+
+	switch message.Header.Type {
+	case MessageBet, MessageResults:
+		if len(message.Payload) == 0 {
+			return fmt.Errorf("message requires a payload")
+		}
+
+	case MessageEndBets, MessageEndResults:
+		if len(message.Payload) != 0 {
+			return fmt.Errorf("control message must have empty payload")
+		}
+	}
+
+	return nil
+}
