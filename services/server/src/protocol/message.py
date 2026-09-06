@@ -5,8 +5,7 @@ from enum import IntEnum
 # 4 bytes para el tamaño del payload
 HEADER_SIZE = 5
 
-# TODO: Definir el tamaño máx
-MAX_PAYLOAD_SIZE = 1024 
+MAX_PAYLOAD_SIZE = 1024 * 1024  # 1 MB
 
 """Tipos de mensajes definidos por el protocolo""" # TODO: Definir si va a ser así o si va a ser un enum de strings
 class MessageType(IntEnum):

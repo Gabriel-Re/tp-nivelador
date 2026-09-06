@@ -35,11 +35,7 @@ func EncodeHeader(header Header) ([]byte, error) {
  */
 func DecodeHeader(data []byte) (Header, error) {
 	if len(data) != HeaderSize {
-		return Header{}, fmt.Errorf(
-			"invalid header size: expected %d, received %d",
-			HeaderSize,
-			len(data),
-		)
+		return Header{}, fmt.Errorf("invalid header size: expected %d, received %d", HeaderSize, len(data))
 	}
 
 	// Obtengo el tipo de mensaje.

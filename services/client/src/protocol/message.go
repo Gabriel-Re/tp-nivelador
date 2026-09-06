@@ -20,7 +20,7 @@ const (
 const (
 	// Un byte para el tipo de mensaje y 4 bytes para el tamaño del payload.
 	HeaderSize = 5
-	MaxPayloadSize = 1024 //TODO tamaño máximo del payload (a definir) 
+	MaxPayloadSize = 1024 * 1024 // 1 MB
 )
 
 /*
@@ -38,10 +38,6 @@ type Message struct {
 	Header Header
 	Payload []byte
 }
-
-// Funciones TODO
-// Mensaje valido, Header valido, Payload valido? Serialization, Deserialization?
-
 
 /*
  * Verifica si un tipo de mensaje es válido.
@@ -64,10 +60,7 @@ func ValidateHeader(header Header) error {
 	}
 
 	if header.PayloadLength > MaxPayloadSize {
-		return fmt.Errorf(
-			"payload too large: %d bytes",
-			header.PayloadLength,
-		)
+		return fmt.Errorf("payload too large: %d bytes", header.PayloadLength)
 	}
 
 	return nil
