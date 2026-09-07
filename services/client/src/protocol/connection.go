@@ -51,7 +51,7 @@ func SendMessage(writer io.Writer, messageType MessageType, payload []byte,) err
 /*
  * Se encargar de recibir un mensaje completo utilizando el protocolo definido
  *
- * Primero recibe los HeaderSize bytes del header 
+ * Primero recibe los bytes del header 
  * Deserializa, y a partir de eso sabe cuantos bytes debe recibir del payload
  *
  * SendAll garantiza el envio de todos los bytes

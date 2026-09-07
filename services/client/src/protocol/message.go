@@ -79,12 +79,12 @@ func ValidateMessage(message Message) error {
 	}
 
 	switch message.Header.Type {
-	case MessageBet, MessageResults:
+	case MessageBet:
 		if len(message.Payload) == 0 {
 			return fmt.Errorf("message requires a payload")
 		}
 
-	case MessageEndBets, MessageEndResults:
+	case MessageEndBets:
 		if len(message.Payload) != 0 {
 			return fmt.Errorf("control message must have empty payload")
 		}
