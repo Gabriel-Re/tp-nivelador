@@ -1,4 +1,4 @@
-package protocol
+package model
 
 /*
  * Representa los datos transportados dentro
@@ -6,7 +6,7 @@ package protocol
  *
  * Ej: {8,Santiago Lionel,Lorca,30904465,1999-03-17,7574}
  */
-type BetPayload struct {
+type Bet struct {
 	AgencyId  uint32
 	FirstName string
 	LastName  string
