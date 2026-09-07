@@ -90,5 +90,11 @@ func ValidateMessage(message Message) error {
 		}
 	}
 
+	case MessageResults:
+		// Payload vacio no hubo ganadores
+
+	case MessageError:
+		// TODO, ver el contenido del error.
+
 	return nil
 }
