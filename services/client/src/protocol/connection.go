@@ -48,6 +48,49 @@ func SendMessage(writer io.Writer, messageType MessageType, payload []byte,) err
 	return nil
 }
 
-// Receivemessage seria del mismo orden
-// Recibo el header, lo decodifico y luego recibo el payload. Como recv all se encargar del short read, no hay que preocuparse por eso.
-// Al final deberia valdiar si es
+/*
+ * Se encargar de recibir un mensaje completo utilizando el protocolo definido
+ *
+ * Primero recibe los HeaderSize bytes del header 
+ * Deserializa, y a partir de eso sabe cuantos bytes debe recibir del payload
+ *
+ * SendAll garantiza el envio de todos los bytes
+ */
+func ReceiveMessage(reader io.Reader) (Message, error) {
+
+	headerBytes, err := safe_socket.RecvAll(reader, HeaderSize)
+	if err != nil {
+		return Message{}, err
+	}
+
+	// Deserializo el header para conocer el tipo y tamaño del payload.
+	header, err := DecodeHeader(headerBytes)
+	if err != nil {
+		return Message{}, err
+	}
+
+	payload := []byte{}
+
+	// Recibo exactamente la cantidad de bytes indicada en el header
+	if header.PayloadLength > 0 {
+		payload, err = safe_socket.RecvAll(
+			reader,
+			int(header.PayloadLength),
+		)
+
+		if err != nil {
+			return Message{}, err
+		}
+	}
+
+	message := Message{
+		Header:  header,
+		Payload: payload,
+	}
+
+	if err := ValidateMessage(message); err != nil {
+		return Message{}, err
+	}
+
+	return message, nil
+}
