@@ -94,3 +94,10 @@ func ReceiveMessage(reader io.Reader) (Message, error) {
 
 	return message, nil
 }
+
+/*
+ * Envia un mensaje de error en caso de que ocurra un problema
+ */
+func SendError(writer io.Writer, message string) error {
+	return SendMessage(writer,MessageError,[]byte(message))
+}

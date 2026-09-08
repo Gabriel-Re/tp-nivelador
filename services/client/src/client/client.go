@@ -82,7 +82,7 @@ func (client *Client) Run() error {
 	//Abro el csv input
     inputFile, err := os.Open(client.config.InputFile)
     if err != nil {
-        return err
+        return client.reportError(err)
     }
 	//Me aseguro de cerrar el archivo input
     defer inputFile.Close()
@@ -90,7 +90,7 @@ func (client *Client) Run() error {
 	//Creo el output
     outputFile, err := os.Create(client.config.OutputFile)
     if err != nil {
-        return err
+        return client.reportError(err)
     }
 	//Me aseguro de cerrar el archivo output
     defer outputFile.Close()
@@ -165,13 +165,13 @@ func (client *Client) processInputFile(
 			client.config.AgencyId,
 		)
 		if err != nil {
-			return err
+			return client.reportError(err)
 		}
 
 		// Serializo la bet al formato definido
 		payload, err := protocol.EncodeBet(bet)
 		if err != nil {
-			return err
+			return client.reportError(err)
 		}
 
 		// Envio la bet al servidor
@@ -186,7 +186,7 @@ func (client *Client) processInputFile(
 
 	// Si scanner termino por un error lo devuelvo
 	if err := scanner.Err(); err != nil {
-		return err
+		return client.reportError(err)
 	}
 
 	// Aviso al servidor que termine de enviar todas las bets
@@ -201,7 +201,7 @@ func (client *Client) processInputFile(
 	// Espero el mensaje con el resultado del sorteo
 	response, err := protocol.ReceiveMessage(client.conn)
 	if err != nil {
-		return err
+		return client.reportError(err)
 	}
 
 	if response.Header.Type == protocol.MessageError {
@@ -273,4 +273,15 @@ func writeAllBytes(writer io.Writer, data []byte) error {
 	}
 
 	return nil
+}
+
+/*
+ * Informa al servidor un error producido en el cliente
+ */
+func (client *Client) reportError(err error) error {
+	if sendErr := protocol.SendError(client.conn,err.Error()); sendErr != nil {
+		logger.Warn("send-error",logger.Fail)
+	}
+
+	return err
 }

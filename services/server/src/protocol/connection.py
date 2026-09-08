@@ -73,3 +73,9 @@ def send_message(socket: socket.socket,message_type: MessageType,payload: bytes 
             socket,
             payload,
         )
+
+"""
+Envia un mensaje de error al cliente en caso de que ocurra un problema
+"""
+def send_error(socket: socket.socket, message: str) -> None:
+    send_message(socket,MessageType.ERROR,message.encode("utf-8"))

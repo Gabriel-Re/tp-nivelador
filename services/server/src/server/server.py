@@ -4,7 +4,7 @@ import logger
 
 from lottery import Lottery
 from protocol.bet_codec import decode_bet, encode_bets
-from protocol.connection import receive_message, send_message
+from protocol.connection import receive_message, send_message, send_error
 from protocol.message import MessageType
 
 BETS_FILE_NAME = "bets.csv"
@@ -73,14 +73,46 @@ class Server:
                         "messages-amount",
                         message_amount,
                     )
+
                     return
 
-                raise ValueError(f"unexpected message type: "f"{client_message.header.message_type}")
+                if client_message.header.message_type == MessageType.ERROR:
+                    client_error = client_message.payload.decode(
+                        "utf-8",
+                        errors="replace",
+                    )
+
+                    logger.error(
+                        action,
+                        logger.LogResult.fail,
+                        "client-error",
+                        client_error,
+                    )
+
+                    return
+
+                raise ValueError(
+                    f"unexpected message type: "
+                    f"{client_message.header.message_type}"
+                )
 
         except Exception as e:
-            logger.error(action,logger.LogResult.fail,"messages-amount",message_amount)
+            logger.error(
+                action,
+                logger.LogResult.fail,
+                "messages-amount",
+                message_amount,
+            )
 
-            raise e
+            error_message = str(e) or "server error"
+
+            try:
+                send_error(client_socket,error_message)
+            except Exception:
+                logger.error(
+                    "send-error",
+                    logger.LogResult.fail,
+                )
 
     def run(self):
         action = "accept-connection"
