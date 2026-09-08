@@ -7,8 +7,7 @@ HEADER_SIZE = 5
 
 MAX_PAYLOAD_SIZE = 1024 * 1024  # 1 MB
 
-"""Tipos de mensajes definidos por el protocolo""" # TODO: Definir si va a ser así o si va a ser un enum de strings
-class MessageType(IntEnum):
+"""Tipos de mensajes definidos por el protocolo"""
     BET = 1
     END_BETS = 2
     RESULTS = 3

@@ -1,5 +1,7 @@
 Redactar un breve informe en donde se detallen los aspectos más importantes de la solución provista, como ser el protocolo de comunicación implementado y los mecanismos para sincronizar la ejecución concurrente.
 
+# Informe - Gabriel Re (105095)
+
 ## Protocolo de comunicación
 
 ### Formato inicial del mensaje
@@ -31,7 +33,17 @@ De manera similar, no se definió un mensaje especial para una respuesta sin gan
 
 ### Flujo inicial de comunicación
 
-**TODO**
+Por cada apuesta leída del archivo, el cliente construye una `Bet`,la serializa y la envía al servidor mediante un mensaje `BET`.
+
+El servidor recibe cada mensaje, deserializa el payload y almacena la apuesta utilizando `Lottery.store_bets`.
+
+Cuando el cliente termina de recorrer el archivo envía un mensaje `END_BETS` con payload vacío. Este mensaje actúa como mecanismo de sincronización e indica al servidor que puede comenzar a calcular los resultados.
+
+El servidor obtiene las apuestas almacenadas mediante `load_bets`, verifica cada una mediante `has_won` y filtra los ganadores correspondientes a la agencia.
+
+Finalmente, los ganadores se serializan y se envían al cliente mediante un mensaje `RESULTS`. Si la agencia no posee ganadores, `RESULTS` se envía con payload vacío.
+
+El cliente deserializa el payload de `RESULTS` y persiste las apuestas ganadoras en `OUTPUT_FILE`.
 
 ### Manejo de errores
 

@@ -89,10 +89,5 @@ func ValidateMessage(message Message) error {
 			return fmt.Errorf("control message must have empty payload")
 		}
 	}
-	//case MessageResults:
-		// Payload vacio no hubo ganadores
-	//case MessageError:
-		// TODO, ver el contenido del error.
-
 	return nil
 }
