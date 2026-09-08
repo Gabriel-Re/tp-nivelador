@@ -5,16 +5,19 @@ import (
 	"time"
 	"os"
 	"bufio"
-	"errors"
+	"fmt"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
-	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
+	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/model"
+	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/protocol"
 )
 
 const CONNECTION_ATTEMPTS_MAX = 3
 const CONNECTION_ATTEMPS_DELAY_MS = 200
-const ECHO_MESSAGE_SIZE = 1024
+const AMOUNT_OF_FIELDS_IN_BET = 5
 
 type ClientConfig struct {
 	ServerHost string
@@ -95,88 +98,146 @@ func (client *Client) Run() error {
     return client.processInputFile(inputFile, outputFile)
 }
 
+/*
+ * Construye una Bet a partir de una linea del archivo de entrada
+ * El AgencyId se recibe desde la configuracion del cliente
+ */
+func parseBet(line string, agencyId string) (model.Bet, error) {
+	// Separo los campos de la apuesta. Esto los deja como strings asi que tengo que convertir los campos uint
+	fields := strings.Split(line, ",")
+
+	if len(fields) != AMOUNT_OF_FIELDS_IN_BET {
+		return model.Bet{}, fmt.Errorf("invalid bet: expected %d fields, received %d", AMOUNT_OF_FIELDS_IN_BET, len(fields))
+	}
+
+	// Convierto el id a uint64
+	id, err := strconv.ParseUint(fields[2], 10, 64)
+	if err != nil {
+		return model.Bet{}, fmt.Errorf(
+			"invalid Id: %w",
+			err,
+		)
+	}
+
+	// Convierto el numero apostado a uint32
+	number, err := strconv.ParseUint(fields[4], 10, 32)
+	if err != nil {
+		return model.Bet{}, fmt.Errorf("invalid bet number: %w", err)
+	}
+
+	return model.Bet{
+		AgencyId:  agencyId,
+		FirstName: fields[0],
+		LastName:  fields[1],
+		Id:        id,
+		Birthdate: fields[3],
+		Number:    uint32(number),
+	}, nil
+}
 
 /*
  * La funcion se encarga de procesar el archivo linea por linea
  *
- * Cada linea representa una apuesta, para cada una:
- * 1. Lee la linea y la envia al servidor.
- * 2. Recibe la respuesta del servidor.
- * 3. Escribe esa respuesta en el archivo de salida
- *
+ * Cada linea representa una apuesta:
+ * 1. Construye una Bet a partir de la linea leida.
+ * 2. Serializa la apuesta y la envia al servidor.
+ * 3. Cuando termina el archivo envia END_BETS.
+ * 4. Espera el mensaje RESULTS con las apuestas ganadoras.
+ * 5. Escribe los ganadores en el archivo de salida.
  */
 func (client *Client) processInputFile(
-    inputFile *os.File,
-    outputFile *os.File,
+	inputFile *os.File,
+	outputFile *os.File,
 ) error {
 
-	//Uso scanner para recorrer linea por linea, por defecto usa ScanLines (https://pkg.go.dev/bufio#NewScanner)
+	// Uso scanner para recorrer linea por linea, por defecto usa ScanLines (https://pkg.go.dev/bufio#NewScanner)
     scanner := bufio.NewScanner(inputFile)
 
-    for scanner.Scan() {
-		//ScanLines no devuelve el fin de linea, entonces lo agrego
-        message := scanner.Text() + "\n"
+	for scanner.Scan() {
+		// Ignoro en caso de que haya lineas vacias
+		if scanner.Text() == "" {
+			continue
+		}
 
-		//Envio al server y espero respuesta
-        response, err := client.sendMessage(message)
-        if err != nil {
-            return err
-        }
+		// Convierto la linea leida en una Bet (pkg.go.dev/bufio#Scanner.Text)
+		bet, err := parseBet(
+			scanner.Text(),
+			client.config.AgencyId,
+		)
+		if err != nil {
+			return err
+		}
 
-		//Escribo la respuesta en el archivo de salida verificando que hayan llegado todos los bytes
-        if err := writeAllBytes(outputFile, response); err != nil {
-            return err
-        }
-    }
+		// Serializo la bet al formato definido
+		payload, err := protocol.EncodeBet(bet)
+		if err != nil {
+			return err
+		}
 
-	//Si scanner termino por un error se devuelve, caso de que haya leido todo el archivo devuelve nil.
-    return scanner.Err()
-}
-
-
-/*
- * La funcion se encarga de la comunicación con el servidor.
- *
- * Recibe un mensaje, lo envia a traves del socket y esperar
- * recibir una respuesta del servidor del mismo tamaño. 
- *
- */
-func (client *Client) sendMessage(message string) ([]byte, error) {
-
-	messageBytes := []byte(message)
-
-	// Verifico que el mensaje entre en el tamaño fijo del echo server (1024 bytes)
-	if len(messageBytes) > ECHO_MESSAGE_SIZE {
-		return nil, errors.New("message exceeds maximum echo message size")
+		// Envio la bet al servidor
+		if err := protocol.SendMessage(
+			client.conn,
+			protocol.MessageBet,
+			payload,
+		); err != nil {
+			return err
+		}
 	}
 
-	// Hago un buffer fijo de 1024 bytes, los bytes sin datos los dejo en 0
-	buffer := make([]byte, ECHO_MESSAGE_SIZE)
+	// Si scanner termino por un error lo devuelvo
+	if err := scanner.Err(); err != nil {
+		return err
+	}
 
-	// Copio el mensaje al comienzo del buffer
-	copy(buffer, messageBytes)
+	// Aviso al servidor que termine de enviar todas las bets
+	if err := protocol.SendMessage(
+		client.conn,
+		protocol.MessageEndBets,
+		nil,
+	); err != nil {
+		return err
+	}
 
-	// Envio exactamente 1024 bytes
-    if err := safe_socket.SendAll(
-        client.conn,
-        buffer,
-    ); err != nil {
-        return nil, err
-    }
+	// Espero el mensaje con el resultado del sorteo
+	response, err := protocol.ReceiveMessage(client.conn)
+	if err != nil {
+		return err
+	}
 
-	// Como el servidor devuelve los 1024 bytes, espero exactamente esa cantidad
-    response, err := safe_socket.RecvAll(
-        client.conn,
-        ECHO_MESSAGE_SIZE,
-    )
-    if err != nil {
-        return nil, err
-    }
+	if response.Header.Type == protocol.MessageError {
+		return fmt.Errorf("server error: %s", string(response.Payload))
+	}
 
-	// EL servidor devolvio el pending, asi que retorno solamente los bytes correspondientes al mensaje original
-    return response[:len(messageBytes)], nil
+	if response.Header.Type != protocol.MessageResults {
+		return fmt.Errorf("unexpected message type: %d", response.Header.Type)
+	}
+
+	// Deserializo las bet ganadoras
+	winners, err := protocol.DecodeBets(response.Payload)
+	if err != nil {
+		return err
+	}
+
+	// Escribo cada ganador respetando el formato
+	for _, winner := range winners {
+		line := fmt.Sprintf(
+			"%s,%s,%d,%s,%d\n",
+			winner.FirstName,
+			winner.LastName,
+			winner.Id,
+			winner.Birthdate,
+			winner.Number,
+		)
+
+		if err := writeAllBytes(
+			outputFile,
+			[]byte(line),
+		); err != nil {
+			return err
+		}
+	}
+	return nil
 }
-
 
 /*
  * Escribe todos los bytes de data usando el writer
