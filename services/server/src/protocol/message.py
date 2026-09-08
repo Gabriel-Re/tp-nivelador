@@ -8,6 +8,7 @@ HEADER_SIZE = 5
 MAX_PAYLOAD_SIZE = 1024 * 1024  # 1 MB
 
 """Tipos de mensajes definidos por el protocolo"""
+class MessageType(IntEnum):
     BET = 1
     END_BETS = 2
     RESULTS = 3

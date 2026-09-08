@@ -2,7 +2,7 @@ import socket
 
 import safe_socket
 
-from .codec import decode_header, encode_header
+from .codec import decode_header, encode_header, validate_message
 from .message import HEADER_SIZE, Header, Message, MessageType
 
 
@@ -33,10 +33,11 @@ def receive_message(socket: socket.socket) -> Message:
         if len(payload) != header.payload_length:
             raise ConnectionError("socket closed before receiving complete payload")
 
-    return Message(
-        header=header,
-        payload=payload,
-    )
+    message = Message(header=header,payload=payload)
+
+    validate_message(message)
+
+    return message
 
 
 """
@@ -50,6 +51,13 @@ def send_message(socket: socket.socket,message_type: MessageType,payload: bytes 
         message_type=message_type,
         payload_length=len(payload),
     )
+
+    message = Message(
+        header=header,
+        payload=payload,
+    )
+
+    validate_message(message)
 
     # Serializo y envio el header
     header_bytes = encode_header(header)
