@@ -114,3 +114,34 @@ func hasReservedSeparator(value string) bool {
 	return strings.Contains(value, fieldSeparator) ||
 		strings.Contains(value, betSeparator)
 }
+
+
+/*
+ * Serializa un batch de bets en un payload para enviar al servidor
+ */
+func EncodeBets(bets []model.Bet) ([]byte, error) {
+    if len(bets) == 0 {
+        return nil, fmt.Errorf("cannot encode empty batch")
+    }
+
+	// Creo un slice para almacenar las bets serializadas
+    encodedBets := make([]string, 0, len(bets))
+
+    for _, bet := range bets {
+        encodedBet, err := EncodeBet(bet)
+        if err != nil {
+            return nil, err
+        }
+
+        encodedBets = append(encodedBets, string(encodedBet))
+    }
+
+	// Uno todas las bets serializadas en un solo payload con el separador
+    payload := []byte(strings.Join(encodedBets, betSeparator))
+
+    if len(payload) > MaxPayloadSize {
+        return nil, fmt.Errorf("batch exceeds maximum payload size")
+    }
+
+    return payload, nil
+}

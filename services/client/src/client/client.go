@@ -20,12 +20,12 @@ const CONNECTION_ATTEMPS_DELAY_MS = 200
 const AMOUNT_OF_FIELDS_IN_BET = 5
 
 type ClientConfig struct {
-	ServerHost string
-	ServerPort string
-	AgencyId   string
-
-	InputFile string
-	OutputFile string
+    ServerHost string
+    ServerPort string
+    AgencyId   string
+    InputFile  string
+    OutputFile string
+    BatchSize  int
 }
 
 type Client struct {
@@ -201,7 +201,7 @@ func (client *Client) processInputFile(
 	// Espero el mensaje con el resultado del sorteo
 	response, err := protocol.ReceiveMessage(client.conn)
 	if err != nil {
-		return client.reportError(err)
+		return err
 	}
 
 	if response.Header.Type == protocol.MessageError {
