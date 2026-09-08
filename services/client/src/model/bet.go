@@ -7,10 +7,10 @@ package model
  * Ej: {8,Santiago Lionel,Lorca,30904465,1999-03-17,7574}
  */
 type Bet struct {
-	AgencyId  uint32
+	AgencyId  string
 	FirstName string
 	LastName  string
-	Id  uint64
+	Id        uint64
 	Birthdate string
 	Number    uint32
 }

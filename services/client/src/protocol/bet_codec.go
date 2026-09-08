@@ -10,7 +10,7 @@ import (
 
 // Utilizo este separador para separar los campos de una bet dentro del payload del mensaje
 const (
-	fieldSeparator = "|", 
+	fieldSeparator = "|" 
 	betSeparator   = "\n"
 )
 
@@ -86,6 +86,7 @@ func decodeBet(data string) (model.Bet, error) {
 		)
 	}
 
+	// Campo, base 10, y 64 bits
 	id, err := strconv.ParseUint(fields[3], 10, 64)
 	if err != nil {
 		return model.Bet{}, fmt.Errorf("invalid Id: %w", err)
