@@ -10,6 +10,7 @@ services:
       - PYTHONUNBUFFERED=1
       - SERVER_HOST=server
       - SERVER_PORT=5678
+      - SERVER_STORAGE_DIR=/data
 
   client_0:
     build:
