@@ -46,9 +46,7 @@ def decode_header(data: bytes) -> Header:
     try:
         message_type = MessageType(data[0])
     except ValueError as error:
-        raise ValueError(
-            f"unknown message type: {data[0]}"
-        ) from error
+        raise ValueError(f"unknown message type: {data[0]}")
 
     # Obtengo el largo del payload
     payload_length = int.from_bytes(
