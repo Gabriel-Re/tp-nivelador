@@ -25,7 +25,7 @@ services:
       - SERVER_PORT=5678
       - INPUT_FILE=/input/input-0.csv
       - OUTPUT_FILE=/output/output-0.csv
-      - BATCH_SIZE = 1
+      - BATCH_SIZE=1
     volumes:
       - ./input:/input:ro
       - ./output:/output
@@ -43,7 +43,7 @@ services:
       - SERVER_PORT=5678
       - INPUT_FILE=/input/input-1.csv
       - OUTPUT_FILE=/output/output-1.csv
-      - BATCH_SIZE = 1
+      - BATCH_SIZE=1
     volumes:
       - ./input:/input:ro
       - ./output:/output
@@ -62,7 +62,7 @@ services:
       - SERVER_PORT=5678
       - INPUT_FILE=/input/input-2.csv
       - OUTPUT_FILE=/output/output-2.csv
-      - BATCH_SIZE = 1
+      - BATCH_SIZE=1
     volumes:
       - ./input:/input:ro
       - ./output:/output
@@ -81,7 +81,7 @@ services:
       - SERVER_PORT=5678
       - INPUT_FILE=/input/input-3.csv
       - OUTPUT_FILE=/output/output-3.csv
-      - BATCH_SIZE = 1
+      - BATCH_SIZE=16
     volumes:
       - ./input:/input:ro
       - ./output:/output
@@ -100,7 +100,7 @@ services:
       - SERVER_PORT=5678
       - INPUT_FILE=/input/input-4.csv
       - OUTPUT_FILE=/output/output-4.csv
-      - BATCH_SIZE = 1
+      - BATCH_SIZE=5
     volumes:
       - ./input:/input:ro
       - ./output:/output
@@ -119,7 +119,7 @@ services:
       - SERVER_PORT=5678
       - INPUT_FILE=/input/input-5.csv
       - OUTPUT_FILE=/output/output-5.csv
-      - BATCH_SIZE = 1
+      - BATCH_SIZE=1
     volumes:
       - ./input:/input:ro
       - ./output:/output
