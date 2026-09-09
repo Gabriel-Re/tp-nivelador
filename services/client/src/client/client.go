@@ -149,44 +149,25 @@ func (client *Client) processInputFile(
 	inputFile *os.File,
 	outputFile *os.File,
 ) error {
-
 	// Uso scanner para recorrer linea por linea, por defecto usa ScanLines (https://pkg.go.dev/bufio#NewScanner)
     scanner := bufio.NewScanner(inputFile)
 
-	for scanner.Scan() {
-		// Ignoro en caso de que haya lineas vacias
-		if scanner.Text() == "" {
-			continue
-		}
-
-		// Convierto la linea leida en una Bet (pkg.go.dev/bufio#Scanner.Text)
-		bet, err := parseBet(
-			scanner.Text(),
-			client.config.AgencyId,
-		)
+	for {
+		// Leo un lote de hasta BATCH_SIZE apuestas
+		bets, err := client.readBatch(scanner)
 		if err != nil {
 			return client.reportError(err)
 		}
 
-		// Serializo la bet al formato definido
-		payload, err := protocol.EncodeBet(bet)
-		if err != nil {
+		// Termino de leer el archivo
+		if len(bets) == 0 {
+			break
+		}
+
+		// Serializo y envio el batch de bets al sv
+		if err := client.sendBatch(bets); err != nil {
 			return client.reportError(err)
 		}
-
-		// Envio la bet al servidor
-		if err := protocol.SendMessage(
-			client.conn,
-			protocol.MessageBet,
-			payload,
-		); err != nil {
-			return err
-		}
-	}
-
-	// Si scanner termino por un error lo devuelvo
-	if err := scanner.Err(); err != nil {
-		return client.reportError(err)
 	}
 
 	// Aviso al servidor que termine de enviar todas las bets
@@ -236,6 +217,7 @@ func (client *Client) processInputFile(
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -284,4 +266,74 @@ func (client *Client) reportError(err error) error {
 	}
 
 	return err
+}
+
+/*
+ * Lee un batch de bets desde el scanner hasta completar el batch o llegar al final del archivo
+ */
+func (client *Client) readBatch(scanner *bufio.Scanner) ([]model.Bet, error) {
+
+    bets := make([]model.Bet, 0, client.config.BatchSize)
+
+    for len(bets) < client.config.BatchSize && scanner.Scan() {
+		// Ignoro en caso de que haya lineas vacias
+        if scanner.Text() == "" {
+            continue
+        }
+
+        bet, err := parseBet(
+            scanner.Text(),
+            client.config.AgencyId,
+        )
+        if err != nil {
+            return nil, err
+        }
+
+        bets = append(bets, bet)
+    }
+
+    if err := scanner.Err(); err != nil {
+        return nil, err
+    }
+
+    return bets, nil
+}
+
+/*
+ * Envia un batch de bets al servidor y espera la respuesta
+ */
+func (client *Client) sendBatch(bets []model.Bet) error {
+    payload, err := protocol.EncodeBets(bets)
+    if err != nil {
+        return err
+    }
+
+    if err := protocol.SendMessage(
+        client.conn,
+        protocol.MessageBet,
+        payload,
+    ); err != nil {
+        return err
+    }
+
+    response, err := protocol.ReceiveMessage(client.conn)
+    if err != nil {
+        return err
+    }
+
+    if response.Header.Type == protocol.MessageError {
+        return fmt.Errorf(
+            "server rejected batch: %s",
+            string(response.Payload),
+        )
+    }
+
+    if response.Header.Type != protocol.MessageAck {
+        return fmt.Errorf(
+            "unexpected message type: %d",
+            response.Header.Type,
+        )
+    }
+
+    return nil
 }
