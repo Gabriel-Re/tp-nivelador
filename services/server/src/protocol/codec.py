@@ -6,6 +6,7 @@ from .message import (
     Message,
 )
 
+
 """Valida que el mensaje respete las restricciones del protocolo"""
 def validate_message(message: Message) -> None:
     validate_header(message.header)
@@ -25,6 +26,11 @@ def validate_message(message: Message) -> None:
         if not message.payload:
             raise ValueError("ERROR message requires a payload")
 
+    elif message.header.message_type == MessageType.ACK:
+        if message.payload:
+            raise ValueError("ACK message must have empty payload")
+
+
 """Valida que el header respete las restricciones del protocolo"""
 def validate_header(header: Header) -> None:
     try:
@@ -39,6 +45,7 @@ def validate_header(header: Header) -> None:
         raise ValueError(
             f"payload too large: {header.payload_length} bytes"
         )
+
 
 """
 Serializa un Header utilizando el formato del protocolo

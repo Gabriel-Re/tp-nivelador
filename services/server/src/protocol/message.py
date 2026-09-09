@@ -13,6 +13,7 @@ class MessageType(IntEnum):
     END_BETS = 2
     RESULTS = 3
     ERROR = 4
+    ACK = 5
 
 
 """Información necesaria para interpretar el payload de un mensaje"""
