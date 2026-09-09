@@ -34,6 +34,23 @@ class Server:
         self.draw_completed = False
 
     """
+    Registra que una agencia termino de enviar bets y espera hasta
+    alcanzar la cantidad mínima de agencias para el sorteo
+    """
+    def _wait_for_quorum(self, agency_id):
+        with self.quorum_condition:
+            self.finished_agencies.add(agency_id)
+
+            # Si se completa el quorum habilita el sorteo y despierta a todos los threads
+            if (not self.draw_completed and len(self.finished_agencies) >= self.agency_quorum_min):
+                self.draw_completed = True
+                self.quorum_condition.notify_all()
+
+            # Si todavía no se alcanzo, libero el lock y espero
+            while not self.draw_completed:
+                self.quorum_condition.wait()
+
+    """
     Atiende los mensajes recibidos de un cliente
     """
     def _handle_client(self, client_socket):
@@ -70,18 +87,19 @@ class Server:
                         continue
 
                     if client_message.header.message_type == MessageType.END_BETS:
-                        winners = []
+                        if agency_id is None:
+                            raise ValueError("cannot finish bets without an agency id")
 
-                        if agency_id is not None:
-                            # Filtro por agency_id para devolver solamente resultados pertenecientes a esa agencia
-                            # Y hago lock para evitar problemas de concurrencia
-                            with self.lottery_lock:
-                                winners = [
-                                    bet
-                                    for bet in self.lottery.load_bets()
-                                    if bet.agency_id == agency_id
-                                    and self.lottery.has_won(bet)
-                                ]
+                        # Termino de enviar apuestas y cuento
+                        self._wait_for_quorum(agency_id)
+
+                        with self.lottery_lock:
+                            winners = [
+                                bet
+                                for bet in self.lottery.load_bets()
+                                if bet.agency_id == agency_id
+                                and self.lottery.has_won(bet)
+                            ]
 
                         payload = encode_bets(winners)
 
