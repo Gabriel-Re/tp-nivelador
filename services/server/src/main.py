@@ -6,6 +6,7 @@ import server
 
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
+AGENCY_QUORUM_MIN = int(os.environ["AGENCY_QUORUM_MIN"])
 
 # En este directorio se almacenan las bets
 SERVER_STORAGE_DIR = os.environ.get("SERVER_STORAGE_DIR","/data")
@@ -13,7 +14,11 @@ SERVER_STORAGE_DIR = os.environ.get("SERVER_STORAGE_DIR","/data")
 
 def main():
     logger.init()
-    s = server.Server(SERVER_HOST, SERVER_PORT, SERVER_STORAGE_DIR)
+
+    if AGENCY_QUORUM_MIN <= 0:
+        raise ValueError("AGENCY_QUORUM_MIN must be greater than zero")
+
+    s = server.Server(SERVER_HOST, SERVER_PORT, SERVER_STORAGE_DIR, AGENCY_QUORUM_MIN)
     try:
         s.run()
     except Exception as e:
