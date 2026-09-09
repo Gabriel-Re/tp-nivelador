@@ -12,6 +12,7 @@ const (
 	MessageEndBets MessageType = 2
 	MessageResults MessageType = 3
 	MessageError MessageType = 4
+	MessageAck MessageType = 5
 )
 
 /* 
@@ -44,7 +45,7 @@ type Message struct {
  */
 func IsValidMessageType(messageType MessageType) bool {
 	switch messageType {
-	case MessageBet, MessageEndBets, MessageResults, MessageError:
+	case MessageBet, MessageEndBets, MessageResults, MessageError, MessageAck:
 		return true
 	default:
 		return false
@@ -87,6 +88,11 @@ func ValidateMessage(message Message) error {
 	case MessageEndBets:
 		if len(message.Payload) != 0 {
 			return fmt.Errorf("control message must have empty payload")
+		}
+
+	case MessageAck:
+		if len(message.Payload) != 0 {
+			return fmt.Errorf("ack message must have empty payload")
 		}
 	}
 	return nil
