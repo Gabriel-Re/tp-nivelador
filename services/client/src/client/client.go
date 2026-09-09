@@ -166,7 +166,7 @@ func (client *Client) processInputFile(
 
 		// Serializo y envio el batch de bets al sv
 		if err := client.sendBatch(bets); err != nil {
-			return client.reportError(err)
+			return err
 		}
 	}
 

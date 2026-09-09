@@ -39,6 +39,27 @@ def decode_bet(payload: bytes) -> Bet:
 
 
 """
+Deserializa un batch de bets
+
+Cada bet se encuentra separada mediante un salto de linea.
+"""
+def decode_bets(payload: bytes) -> list[Bet]:
+    if not payload:
+        raise ValueError("empty bet batch")
+
+    # Separo las distintas bets
+    encoded_bets = payload.split(BET_SEPARATOR)
+
+    bets = []
+
+    for encoded_bet in encoded_bets:
+        bet = decode_bet(encoded_bet)
+        bets.append(bet)
+
+    return bets
+
+
+"""
 Serializa una bet individual
 """
 def encode_bet(bet: Bet) -> bytes:

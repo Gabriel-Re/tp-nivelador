@@ -3,7 +3,7 @@ import socket
 import logger
 
 from lottery import Lottery
-from protocol.bet_codec import decode_bet, encode_bets
+from protocol.bet_codec import decode_bets, encode_bets
 from protocol.connection import receive_message, send_message, send_error
 from protocol.message import MessageType
 
@@ -37,17 +37,19 @@ class Server:
                 client_message = receive_message(client_socket)
 
                 if client_message.header.message_type == MessageType.BET:
-                    bet = decode_bet(client_message.payload)
+                    # Deserializo todas las bets 
+                    bets = decode_bets(client_message.payload)
 
                     # La primera bet recibida identifica el id de la agencia
                     if agency_id is None:
-                        agency_id = bet.agency_id
+                        agency_id = bets[0].agency_id
 
-                    lottery_bets = [bet]
-
-                    self.lottery.store_bets(lottery_bets)
+                    self.lottery.store_bets(bets)
 
                     message_amount += 1
+
+                    # Respondo con ACK si se procesaron correctamente todas las bets
+                    send_message(client_socket,MessageType.ACK)
 
                     continue
 
