@@ -58,7 +58,9 @@ class Server:
                         if agency_id is None:
                             agency_id = bets[0].agency_id
 
-                        self.lottery.store_bets(bets)
+                        # Hago lock para evitar problemas de concurrencia
+                        with self.lottery_lock:
+                            self.lottery.store_bets(bets)
 
                         message_amount += 1
 
@@ -72,12 +74,14 @@ class Server:
 
                         if agency_id is not None:
                             # Filtro por agency_id para devolver solamente resultados pertenecientes a esa agencia
-                            winners = [
-                                bet
-                                for bet in self.lottery.load_bets()
-                                if bet.agency_id == agency_id
-                                and self.lottery.has_won(bet)
-                            ]
+                            # Y hago lock para evitar problemas de concurrencia
+                            with self.lottery_lock:
+                                winners = [
+                                    bet
+                                    for bet in self.lottery.load_bets()
+                                    if bet.agency_id == agency_id
+                                    and self.lottery.has_won(bet)
+                                ]
 
                         payload = encode_bets(winners)
 
