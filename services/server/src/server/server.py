@@ -32,6 +32,13 @@ class Server:
 
         self.finished_agencies = set()
         self.draw_completed = False
+        # Evento para avisar que tengo que cerrar las conexiones
+        self.shutdown_event = threading.Event()
+
+        # Mantengo los threads y sockets activos para poder cerrarlos al terminar
+        self.client_threads = []
+        self.client_sockets = set()
+        self.client_sockets_lock = threading.Lock()
 
     """
     Registra que una agencia termino de enviar bets y espera hasta
@@ -53,6 +60,8 @@ class Server:
             # Si todavía no se alcanzo, libero el lock y espero
             while not self.draw_completed:
                 self.quorum_condition.wait()
+
+            return self.draw_completed
 
             # Para debugear
             #logger.info("wait-quorum",logger.LogResult.success,"agency-id",agency_id,"finished-agencies",len(self.finished_agencies),"quorum-min",self.agency_quorum_min)
@@ -107,7 +116,8 @@ class Server:
                         #logger.info("receive-message",logger.LogResult.success,"agency-id",agency_id,"message-type","END_BETS")
 
                         # Termino de enviar apuestas y cuento
-                        self._wait_for_quorum(agency_id)
+                        if not self._wait_for_quorum(agency_id):
+                            return
 
                         with self.lottery_lock:
                             winners = [
