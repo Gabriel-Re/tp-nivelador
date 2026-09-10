@@ -103,6 +103,9 @@ class Server:
                         if agency_id is None:
                             raise ValueError("cannot finish bets without an agency id")
 
+                        # Para debug
+                        #logger.info("receive-message",logger.LogResult.success,"agency-id",agency_id,"message-type","END_BETS")
+
                         # Termino de enviar apuestas y cuento
                         self._wait_for_quorum(agency_id)
 
@@ -117,6 +120,9 @@ class Server:
                         payload = encode_bets(winners)
 
                         send_message(client_socket, MessageType.RESULTS, payload)
+
+                        # Para debugear
+                        # logger.info("send-message",logger.LogResult.success,"agency-id",agency_id,"message-type","RESULTS","winners-amount",len(winners))
 
                         logger.info(
                             action,
