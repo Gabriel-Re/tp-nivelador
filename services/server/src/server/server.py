@@ -9,6 +9,7 @@ from protocol.connection import receive_message, send_message, send_error
 from protocol.message import MessageType
 
 BETS_FILE_NAME = "bets.csv"
+ACCEPT_TIMEOUT_SECONDS = 0.5
 
 
 class Server:
@@ -58,13 +59,45 @@ class Server:
                 self.quorum_condition.notify_all()
 
             # Si todavía no se alcanzo, libero el lock y espero
-            while not self.draw_completed:
+            while not self.draw_completed and not self.shutdown_event.is_set():
                 self.quorum_condition.wait()
 
             return self.draw_completed
 
             # Para debugear
             #logger.info("wait-quorum",logger.LogResult.success,"agency-id",agency_id,"finished-agencies",len(self.finished_agencies),"quorum-min",self.agency_quorum_min)
+
+    """
+    Indica que el servidor debe comenzar el graceful shutdown
+    """
+    def shutdown(self):
+        self.shutdown_event.set()
+
+    """
+    Cierra los sockets activos y espera a que terminen todos los threads
+    """
+    def _cleanup(self):
+        self.shutdown_event.set()
+
+        # Despierto los threads que puedan estar esperando el quorum
+        with self.quorum_condition:
+            self.quorum_condition.notify_all()
+
+        with self.client_sockets_lock:
+            client_sockets = list(self.client_sockets)
+
+        # Cierro los sockets para desbloquear posibles recv
+        for client_socket in client_sockets:
+            try:
+                client_socket.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+            client_socket.close()
+
+        # Espero que todos los threads terminen antes que el thread principal
+        for client_thread in self.client_threads:
+            client_thread.join()
 
     """
     Atiende los mensajes recibidos de un cliente
@@ -164,6 +197,10 @@ class Server:
                     )
 
             except Exception as e:
+                # Graceful shutdown
+                if self.shutdown_event.is_set():
+                    return
+
                 logger.error(
                     action,
                     logger.LogResult.fail,
@@ -181,29 +218,59 @@ class Server:
                         logger.LogResult.fail,
                     )
 
+            finally:
+                with self.client_sockets_lock:
+                    self.client_sockets.discard(client_socket)
+
     """
     Acepta conexiones y crea un thread independiente para cada cliente
     """
     def run(self):
         action = "accept-connection"
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-            server_socket.bind((self.server_host, self.server_port))
-            server_socket.listen()
-            while True:
-                try:
-                    logger.info(action, logger.LogResult.in_progress)
-                    client_socket, _ = server_socket.accept()
-                except Exception as e:
-                    logger.error(action, logger.LogResult.fail)
-                    raise e
-                logger.info(action, logger.LogResult.success)
 
-                # Cada conexión es procesada por un thread independiente y le indico que empiece en handle_client
-                client_thread = threading.Thread(target=self._handle_client,args=(client_socket,))
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+                server_socket.bind((self.server_host, self.server_port))
+                server_socket.listen()
 
-                try:
-                    client_thread.start()
+                # Evito quedar bloqueado indefinidamente esperando una conexion
+                server_socket.settimeout(ACCEPT_TIMEOUT_SECONDS)
 
-                except Exception:
-                    client_socket.close()
-                    raise
+                while not self.shutdown_event.is_set():
+                    try:
+                        logger.info(action, logger.LogResult.in_progress)
+                        client_socket, _ = server_socket.accept()
+
+                    except socket.timeout:
+                        continue
+
+                    except Exception as e:
+                        logger.error(action, logger.LogResult.fail)
+                        raise e
+
+                    logger.info(action, logger.LogResult.success)
+
+                    # Si se pidio shutdown no comienzo a atender otro cliente
+                    if self.shutdown_event.is_set():
+                        client_socket.close()
+                        break
+
+                    with self.client_sockets_lock:
+                        self.client_sockets.add(client_socket)
+
+                    # Cada conexión es procesada por un thread independiente y le indico que empiece en handle_client
+                    client_thread = threading.Thread(target=self._handle_client,args=(client_socket,))
+
+                    try:
+                        client_thread.start()
+                        self.client_threads.append(client_thread)
+
+                    except Exception:
+                        with self.client_sockets_lock:
+                            self.client_sockets.discard(client_socket)
+
+                        client_socket.close()
+                        raise
+
+        finally:
+            self._cleanup()

@@ -1,4 +1,5 @@
 import os
+import signal
 import sys
 
 import logger
@@ -19,6 +20,10 @@ def main():
         raise ValueError("AGENCY_QUORUM_MIN must be greater than zero")
 
     s = server.Server(SERVER_HOST, SERVER_PORT, SERVER_STORAGE_DIR, AGENCY_QUORUM_MIN)
+
+    # Al recibir SIGTERM indico al servidor que debe finalizar
+    signal.signal(signal.SIGTERM,lambda _signum, _frame: s.shutdown())
+
     try:
         s.run()
     except Exception as e:
