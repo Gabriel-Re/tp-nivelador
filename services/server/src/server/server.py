@@ -1,3 +1,4 @@
+from contextlib import closing
 import os
 import socket
 import logger
@@ -113,7 +114,7 @@ class Server:
             try:
                 logger.info(action, logger.LogResult.in_progress)
 
-                while True:
+                while not self.shutdown_event.is_set():
                     client_message = receive_message(client_socket)
 
                     if client_message.header.message_type == MessageType.BET:
@@ -152,13 +153,13 @@ class Server:
                         if not self._wait_for_quorum(agency_id):
                             return
 
-                        with self.lottery_lock:
-                            winners = [
-                                bet
-                                for bet in self.lottery.load_bets()
-                                if bet.agency_id == agency_id
-                                and self.lottery.has_won(bet)
-                            ]
+                        with self.lottery_lock, closing(self.lottery.load_bets()) as bets:
+                            winners = []
+                            for bet in bets:
+                                if self.shutdown_event.is_set():
+                                    return
+                                if bet.agency_id == agency_id and self.lottery.has_won(bet):
+                                    winners.append(bet)
 
                         payload = encode_bets(winners)
 

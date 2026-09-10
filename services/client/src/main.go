@@ -3,7 +3,9 @@ package main
 import (
 	"errors"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 
 	client "github.com/7574-sistemas-distribuidos/tp-nivelador/src/client"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
@@ -56,6 +58,10 @@ func loadConfig() (client.ClientConfig, error) {
 }
 
 func run() int {
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGTERM)
+	defer signal.Stop(signals)
+
 	config, err := loadConfig()
 	if err != nil {
 		logger.Error("load-config", logger.Fail, "err", err)
@@ -64,11 +70,30 @@ func run() int {
 
 	client, err := client.NewClient(config)
 	if err != nil {
+		select {
+		case <-signals:
+			return 0
+		default:
+		}
 		logger.Error("client-new", logger.Fail, "err", err)
 		return 1
 	}
 
-	if err := client.Run(); err != nil {
+	done := make(chan error, 1)
+	go func() { done <- client.Run() }()
+
+	select {
+	case <-signals:
+		// Cerrar el socket desbloquea Read y Write
+		// espero los defer de Run
+		if err := client.Stop(); err != nil {
+			logger.Warn("client-stop", logger.Fail, "err", err)
+		}
+		<-done
+		return 0
+	case err = <-done:
+	}
+	if err != nil {
 		logger.Error("client-run", logger.Fail, "err", err)
 		return 1
 	}

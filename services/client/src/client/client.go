@@ -18,6 +18,7 @@ import (
 const CONNECTION_ATTEMPTS_MAX = 3
 const CONNECTION_ATTEMPS_DELAY_MS = 200
 const AMOUNT_OF_FIELDS_IN_BET = 5
+const CONNECTION_TIMEOUT = 500 * time.Millisecond
 
 type ClientConfig struct {
     ServerHost string
@@ -31,6 +32,7 @@ type ClientConfig struct {
 type Client struct {
 	conn   net.Conn
 	config ClientConfig
+	stop chan struct{}
 }
 
 func NewClient(config ClientConfig) (*Client, error) {
@@ -40,8 +42,14 @@ func NewClient(config ClientConfig) (*Client, error) {
 		return nil, err
 	}
 
-	client := &Client{conn: conn, config: config}
+	client := &Client{conn: conn, config: config, stop: make(chan struct{})}
 	return client, nil
+}
+
+// Stop se llama una sola vez desde el hilo principal
+func (client *Client) Stop() error {
+	close(client.stop)
+	return client.conn.Close()
 }
 
 func connectToServer(host, port string) (net.Conn, error) {
@@ -51,7 +59,7 @@ func connectToServer(host, port string) (net.Conn, error) {
 
 	logger.Info(action, logger.InProgress)
 	for i := range CONNECTION_ATTEMPTS_MAX {
-		conn, err = net.Dial("tcp", host+":"+port)
+		conn, err = net.DialTimeout("tcp", net.JoinHostPort(host, port), CONNECTION_TIMEOUT)
 		if err != nil {
 			logger.Warn(action, logger.Fail, "attempt", i)
 			time.Sleep(CONNECTION_ATTEMPS_DELAY_MS * time.Millisecond)
@@ -210,6 +218,11 @@ func (client *Client) processInputFile(
 
 	// Escribo cada ganador respetando el formato
 	for _, winner := range winners {
+		select {
+		case <-client.stop:
+			return nil
+		default:
+		}
 		line := fmt.Sprintf(
 			"%s,%s,%d,%s,%d\n",
 			winner.FirstName,
@@ -285,6 +298,11 @@ func (client *Client) readBatch(scanner *bufio.Scanner) ([]model.Bet, error) {
     bets := make([]model.Bet, 0, client.config.BatchSize)
 
     for len(bets) < client.config.BatchSize && scanner.Scan() {
+		select {
+		case <-client.stop:
+			return nil, net.ErrClosed
+		default:
+		}
 		// Ignoro en caso de que haya lineas vacias
         if scanner.Text() == "" {
             continue
