@@ -41,6 +41,10 @@ class Server:
         with self.quorum_condition:
             self.finished_agencies.add(agency_id)
 
+            # PAra debugear
+            #logger.info("wait-quorum",logger.LogResult.in_progress,"agency-id",agency_id,"finished-agencies",len(self.finished_agencies),"quorum-min",self.agency_quorum_min)
+
+
             # Si se completa el quorum habilita el sorteo y despierta a todos los threads
             if (not self.draw_completed and len(self.finished_agencies) >= self.agency_quorum_min):
                 self.draw_completed = True
@@ -49,6 +53,9 @@ class Server:
             # Si todavía no se alcanzo, libero el lock y espero
             while not self.draw_completed:
                 self.quorum_condition.wait()
+
+            # Para debugear
+            #logger.info("wait-quorum",logger.LogResult.success,"agency-id",agency_id,"finished-agencies",len(self.finished_agencies),"quorum-min",self.agency_quorum_min)
 
     """
     Atiende los mensajes recibidos de un cliente
@@ -75,6 +82,9 @@ class Server:
                         if agency_id is None:
                             agency_id = bets[0].agency_id
 
+                        # Para debugear
+                        #logger.info("receive-message",logger.LogResult.success,"agency-id",agency_id,"message-type","BET","bets-amount",len(bets))
+
                         # Hago lock para evitar problemas de concurrencia
                         with self.lottery_lock:
                             self.lottery.store_bets(bets)
@@ -83,6 +93,9 @@ class Server:
 
                         # Respondo con ACK si se procesaron correctamente todas las bets
                         send_message(client_socket,MessageType.ACK)
+
+                        # Para debugear
+                        #logger.info("send-message",logger.LogResult.success,"agency-id",agency_id,"message-type","ACK")
 
                         continue
 

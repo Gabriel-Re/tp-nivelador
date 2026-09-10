@@ -179,6 +179,12 @@ func (client *Client) processInputFile(
 		return err
 	}
 
+	// Para debugear
+	//logger.Info("send-message",logger.Success,"agency-id",client.config.AgencyId,"message-type","END_BETS")
+
+	// Para debugear
+	//logger.Info("receive-message",logger.InProgress,"agency-id",client.config.AgencyId,"expected-message-type","RESULTS")
+
 	// Espero el mensaje con el resultado del sorteo
 	response, err := protocol.ReceiveMessage(client.conn)
 	if err != nil {
@@ -198,6 +204,9 @@ func (client *Client) processInputFile(
 	if err != nil {
 		return err
 	}
+
+	// Para debugear
+	//logger.Info("receive-message",logger.Success,"agency-id",client.config.AgencyId,"message-type","RESULTS","winners-amount",len(winners))
 
 	// Escribo cada ganador respetando el formato
 	for _, winner := range winners {
@@ -316,6 +325,13 @@ func (client *Client) sendBatch(bets []model.Bet) error {
         return err
     }
 
+	// Para debugear
+	//logger.Info("send-message",logger.Success,"agency-id",client.config.AgencyId,"message-type","BET","bets-amount",len(bets))
+
+	// Para debugear
+	// Espero el ACK del servidor antes de enviar el siguiente batch
+	//logger.Info("receive-message",logger.InProgress,"agency-id",client.config.AgencyId,"expected-message-type","ACK")
+
     response, err := protocol.ReceiveMessage(client.conn)
     if err != nil {
         return err
@@ -334,6 +350,9 @@ func (client *Client) sendBatch(bets []model.Bet) error {
             response.Header.Type,
         )
     }
+
+	// Para debugear
+	//logger.Info("receive-message",logger.Success,"agency-id",client.config.AgencyId,"message-type","ACK")
 
     return nil
 }
