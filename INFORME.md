@@ -22,7 +22,7 @@ La lectura y escritura sobre el socket no asume que una única operación permit
 
 ### Tipos de mensajes
 
-En esta primera versión contemplo cuatro tipos:
+En esta primera versión contemplo cinco tipos:
 
 - **BET** : Formato que se utiliza para enviar una apuesta desde el cliente hacia el servidor.
 - **END_BETS** : Formato que se utiliza para informar que la agencia terminó de enviar apuestas.
@@ -30,7 +30,7 @@ En esta primera versión contemplo cuatro tipos:
 - **ERROR** : Formato que se utiliza para informar errores de protocolo cuando la conexión continúa utilizable.
 - **ACK**: Confirma al cliente que todas las apuestas pertenecientes al último batch fueron procesadas correctamente.
 
-Decidí utilizar `END_BETS` explícito en lugar de interpretar `BET` con payload vacío con payload vacío como finalización. Así diferencio claramente los mensajes de datos de los mensajes de control.
+Decidí utilizar `END_BETS` explícito en lugar de interpretar `BET` con payload vacío como finalización. Así diferencio claramente los mensajes de datos de los mensajes de control.
 
 De manera similar, no se definió un mensaje especial para una respuesta sin ganadores. Un mensaje `RESULTS` con payload de longitud cero representa válidamente que no existen resultados para esa agencia.
 
@@ -60,11 +60,9 @@ De esta forma el protocolo mantiene una misma representación para una apuesta i
 
 ### Flujo inicial de comunicación
 
-Por cada apuesta leída del archivo, el cliente construye una `Bet`,la serializa y la envía al servidor mediante un mensaje `BET`.
+El cliente lee las apuestas del archivo, construye una `Bet` por cada una y las agrupa en batches. Luego serializa cada batch y lo envía al servidor dentro del payload de un único mensaje `BET`.
 
-A partir del procesamiento por batches, se serializan y se transportan dentro del payload de un único mensaje `BET`.
-
-El servidor recibe cada mensaje, deserializa el payload y almacena la apuesta utilizando `Lottery.store_bets`.
+El servidor recibe cada mensaje, deserializa el payload y almacena las apuestas del batch utilizando `Lottery.store_bets`.
 
 Actualmente, al recibir un mensaje `BET`, el servidor deserializa primero todas las apuestas incluidas dentro del batch. Una vez completada correctamente la deserialización, almacena el conjunto utilizando `Lottery.store_bets`.
 
@@ -72,7 +70,7 @@ El servidor solamente responde mediante un mensaje `ACK` después de haber proce
 
 Luego de enviar un mensaje `BET`, el cliente espera recibir el `ACK` correspondiente antes de continuar con el siguiente batch. Esto permite sincronizar el envío de apuestas con el procesamiento del servidor y evita que el cliente considere procesado un batch antes de recibir su confirmación.
 
-Cuando el cliente termina de recorrer el archivo envía un mensaje `END_BETS` con payload vacío. Este mensaje actúa como mecanismo de sincronización e indica al servidor que puede comenzar a calcular los resultados.
+Cuando el cliente termina de recorrer el archivo envía un mensaje `END_BETS` con el identificador numérico de agencia. Este mensaje indica que la agencia terminó su carga; el servidor puede calcular sus resultados una vez alcanzado el quorum. Al incluir el ID en `END_BETS`, las agencias sin apuestas también pueden identificarse y contar para el quorum.
 
 El servidor obtiene las apuestas almacenadas mediante `load_bets`, verifica cada una mediante `has_won` y filtra los ganadores correspondientes a la agencia.
 
@@ -92,9 +90,21 @@ De esta manera, para una conexión el orden esperado de los mensajes es:
 
 `BET -> ACK -> BET -> ACK -> ... -> END_BETS -> RESULTS`
 
+Para atender varias agencias al mismo tiempo, el servidor crea un thread por conexión. Esto permite seguir atendiendo clientes mientras otros esperan datos por el socket. El acceso compartido a `Lottery` se protege con un lock para evitar lecturas y escrituras simultáneas sobre el archivo de apuestas.
+
+Las agencias que enviaron `END_BETS` se registran en un conjunto, para no contarlas más de una vez. Una condición protege este conjunto y permite esperar hasta alcanzar `AGENCY_QUORUM_MIN`. Al completar el quorum se despiertan los threads y cada uno devuelve solamente los ganadores de su agencia.
+
+### Cierre graceful
+
+Al recibir `SIGTERM`, el servidor activa un evento de cierre y deja de aceptar conexiones. Despierta los threads que esperan el quorum, interrumpe los sockets activos y espera que todos los threads terminen mediante `join`. El conjunto de sockets también está protegido por un lock.
+
+En el cliente, `Run` se ejecuta en una goroutine y el hilo principal espera mediante channels su finalización o la señal `SIGTERM`. Si recibe la señal, avisa al proceso que debe detenerse y cierra el socket para desbloquear las lecturas y escrituras. Luego espera que `Run` termine y ejecute los `defer` que cierran los archivos.
+
+El servidor revisa el pedido de cierre durante la lectura de apuestas. Además, la espera de nuevas conexiones y los intentos de conexión del cliente tienen tiempos acotados para no impedir la finalización.
+
 ### Manejo de errores
 
-Se distinguen erroes de transporte y errores de protocolo.
+Se distinguen errores de transporte y errores de protocolo.
 
 Los errores de transporte, como el cierre del socket antes de completar un header o un payload, son detectados por las funciones de `safe_socket` y se propagan a las capas superiores.
 
@@ -104,7 +114,7 @@ Los errores de protocolo incluyen:
 - Payload que no puede ser deserializado.
 - Tamaño de payload invalido.
 
-También se valida que los mensajes de control que no requieren información adicional, como `END_BETS` y `ACK`, posean un payload vacío. Por otro lado, un mensaje `BET` debe contener obligatoriamente información para poder ser procesado.
+También se valida que los mensajes de control que no requieren información adicional, como `ACK`, posean un payload vacío. Por otro lado, un mensaje `BET` debe contener obligatoriamente información para poder ser procesado.
 
 En el caso de los batches, si alguna de las apuestas contenidas dentro del mensaje no puede ser deserializada correctamente, el procesamiento del batch se considera fallido y no se envía la confirmación `ACK`.
 
