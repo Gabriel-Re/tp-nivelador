@@ -19,8 +19,8 @@ def validate_message(message: Message) -> None:
             raise ValueError("BET message requires a payload")
 
     elif message.header.message_type == MessageType.END_BETS:
-        if message.payload:
-            raise ValueError("END_BETS message must have empty payload")
+        if not message.payload.isdigit():
+            raise ValueError("END_BETS requires a numeric agency id")
 
     elif message.header.message_type == MessageType.ERROR:
         if not message.payload:

@@ -143,14 +143,21 @@ class Server:
                         continue
 
                     if client_message.header.message_type == MessageType.END_BETS:
-                        if agency_id is None:
-                            raise ValueError("cannot finish bets without an agency id")
+                        finished_agency_id = int(client_message.payload)
+                        if agency_id is not None and agency_id != finished_agency_id:
+                            raise ValueError("END_BETS agency id does not match the bets")
+                        agency_id = finished_agency_id
 
                         # Para debug
                         #logger.info("receive-message",logger.LogResult.success,"agency-id",agency_id,"message-type","END_BETS")
 
                         # Termino de enviar apuestas y cuento
                         if not self._wait_for_quorum(agency_id):
+                            return
+
+                        # Sin apuestas no hay ganadores ni un archivo que leer.
+                        if message_amount == 0:
+                            send_message(client_socket, MessageType.RESULTS)
                             return
 
                         with self.lottery_lock, closing(self.lottery.load_bets()) as bets:

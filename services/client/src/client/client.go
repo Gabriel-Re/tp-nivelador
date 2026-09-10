@@ -5,6 +5,7 @@ import (
 	"time"
 	"os"
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -16,7 +17,7 @@ import (
 )
 
 const CONNECTION_ATTEMPTS_MAX = 3
-const CONNECTION_ATTEMPS_DELAY_MS = 200
+const CONNECTION_ATTEMPS_DELAY_MS = 500
 const AMOUNT_OF_FIELDS_IN_BET = 5
 const CONNECTION_TIMEOUT = 500 * time.Millisecond
 
@@ -49,7 +50,11 @@ func NewClient(config ClientConfig) (*Client, error) {
 // Stop se llama una sola vez desde el hilo principal
 func (client *Client) Stop() error {
 	close(client.stop)
-	return client.conn.Close()
+	err := client.conn.Close()
+	if errors.Is(err, net.ErrClosed) {
+		return nil
+	}
+	return err
 }
 
 func connectToServer(host, port string) (net.Conn, error) {
@@ -83,9 +88,17 @@ func connectToServer(host, port string) (net.Conn, error) {
  * 4. Cierra los archivos y la conexion cuando termina.
  *
  */
-func (client *Client) Run() error {
+func (client *Client) Run() (runErr error) {
+	// Conservo el error original y los de cierre. Los registro tambien durante SIGTERM
+	closeResource := func(resource io.Closer, name string) {
+		if err := resource.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+			closeErr := fmt.Errorf("close %s: %w", name, err)
+			logger.Error("close-resource", logger.Fail, "err", closeErr)
+			runErr = errors.Join(runErr, closeErr)
+		}
+	}
 	//Me aseguro de cerrar la conexion
-    defer client.conn.Close()
+    defer closeResource(client.conn, "connection")
 
 	//Abro el csv input
     inputFile, err := os.Open(client.config.InputFile)
@@ -93,7 +106,7 @@ func (client *Client) Run() error {
         return client.reportError(err)
     }
 	//Me aseguro de cerrar el archivo input
-    defer inputFile.Close()
+    defer closeResource(inputFile, "input file")
 
 	//Creo el output
     outputFile, err := os.Create(client.config.OutputFile)
@@ -101,7 +114,7 @@ func (client *Client) Run() error {
         return client.reportError(err)
     }
 	//Me aseguro de cerrar el archivo output
-    defer outputFile.Close()
+    defer closeResource(outputFile, "output file")
 
     return client.processInputFile(inputFile, outputFile)
 }
@@ -182,7 +195,7 @@ func (client *Client) processInputFile(
 	if err := protocol.SendMessage(
 		client.conn,
 		protocol.MessageEndBets,
-		nil,
+		[]byte(client.config.AgencyId),
 	); err != nil {
 		return err
 	}

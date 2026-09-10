@@ -86,8 +86,13 @@ func ValidateMessage(message Message) error {
 		}
 
 	case MessageEndBets:
-		if len(message.Payload) != 0 {
-			return fmt.Errorf("control message must have empty payload")
+		if len(message.Payload) == 0 {
+			return fmt.Errorf("END_BETS requires an agency id")
+		}
+		for _, digit := range message.Payload {
+			if digit < '0' || digit > '9' {
+				return fmt.Errorf("END_BETS requires a numeric agency id")
+			}
 		}
 
 	case MessageAck:

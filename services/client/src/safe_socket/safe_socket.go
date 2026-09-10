@@ -1,19 +1,24 @@
 package safe_socket
 
-import "io"
+import (
+	"io"
+	"time"
+)
 
 const MAX_NO_PROGRESS_ATTEMPTS = 3
+const WRITE_NO_PROGRESS_TIMEOUT = time.Second
+const WRITE_RETRY_DELAY = time.Millisecond
 
 /*
  * Envía todos los bytes recibidos a través del socket.
  * Como socket.Write() puede devolver menos bytes de los solicitados,
  * incluso cuando quedan datos por enviar, para esto realizo escrituras sucesivas
  * hasta completar el buffer.
- * En caso de que Write() no avance, se realizan un máximo de MAX_NO_PROGRESS_ATTEMPTS intentos antes de retornar error.
+ * Si Write() no avanza, reintento hasta WRITE_NO_PROGRESS_TIMEOUT sin progreso.
  */
 func SendAll(socket io.Writer, bytes []byte) error {
 	totalSent := 0
-	noProgressAttempts := 0
+	var noProgressSince time.Time
 
 	for totalSent < len(bytes) {
 		// Envio solamente la parte del mensaje que no fue enviada
@@ -23,22 +28,23 @@ func SendAll(socket io.Writer, bytes []byte) error {
 		if n > 0 {
 			totalSent += n
 
-			// Reinicio el contador de intentos sin avance
-			noProgressAttempts = 0
+			// Reinicio el tiempo sin avance
+			noProgressSince = time.Time{}
 		}
 		
 		if err != nil {
 			return err
 		}
 		
-		// Si Write no envió ningun byte, vuelvo a intentar
-		// Limito los intentos para evitar un posible loop infinito
+		// Un Write sin avance puede ser transitorio. Achico la espera
 		if n == 0 {
-			noProgressAttempts++
-
-			if noProgressAttempts >= MAX_NO_PROGRESS_ATTEMPTS {
+			if noProgressSince.IsZero() {
+				noProgressSince = time.Now()
+			}
+			if time.Since(noProgressSince) >= WRITE_NO_PROGRESS_TIMEOUT {
 				return io.ErrNoProgress
 			}
+			time.Sleep(WRITE_RETRY_DELAY)
 		}
 	}
 	return nil
